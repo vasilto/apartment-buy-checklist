@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Чеклист за покупка на апартамент</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#fff; --border:#dfe3e8; --text:#1f2937; --muted:#6b7280;
+    --accent:#2563eb; --danger:#dc2626; --good:#16a34a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
+  header{background:var(--panel);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  header h1{font-size:18px;margin:0}
+  main{max-width:960px;margin:0 auto;padding:20px}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px}
+  button{cursor:pointer;border:1px solid var(--border);background:#fff;border-radius:6px;padding:7px 12px;font-size:14px}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  button.danger{background:var(--danger);color:#fff;border-color:var(--danger)}
+  button:hover{opacity:.9}
+  input[type=text],input[type=date],textarea,select{width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:14px;font-family:inherit}
+  label.field{display:block;margin:8px 0;font-size:13px;color:var(--muted)}
+  label.field input,label.field textarea,label.field select{margin-top:3px;color:var(--text)}
+  label.check{display:flex;gap:8px;align-items:flex-start;margin:6px 0;font-size:14px;cursor:pointer}
+  label.check input{margin-top:3px}
+  details{border:1px solid var(--border);border-radius:8px;margin-bottom:10px;background:#fff}
+  details summary{padding:10px 14px;cursor:pointer;font-weight:600;list-style:none}
+  details summary::-webkit-details-marker{display:none}
+  details[open] summary{border-bottom:1px solid var(--border)}
+  details .body{padding:10px 14px}
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);font-size:14px}
+  tr.row:hover{background:#f0f4ff;cursor:pointer}
+  .muted{color:var(--muted);font-size:13px}
+  .top-actions{display:flex;gap:8px}
+  .bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+  .progress{height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;width:80px;display:inline-block;vertical-align:middle}
+  .progress > span{display:block;height:100%;background:var(--good)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+  @media (max-width:640px){.grid2{grid-template-columns:1fr}}
+  .msg{font-size:13px;padding:8px 10px;border-radius:6px;margin-bottom:10px}
+  .msg.error{background:#fef2f2;color:var(--danger);border:1px solid #fecaca}
+  .msg.ok{background:#f0fdf4;color:var(--good);border:1px solid #bbf7d0}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>🏢 Чеклист за покупка на апартамент</h1>
+  <div class="top-actions">
+    <button id="btnSettings">⚙ Настройки</button>
+  </div>
+</header>
+<main>
+  <div id="msg"></div>
+
+  <div id="settingsPanel" class="panel hidden">
+    <h3>Връзка с GitHub (данните се пазят като файл в твоя repo)</h3>
+    <p class="muted">Създай <a href="https://github.com/settings/tokens?type=beta" target="_blank">fine-grained personal access token</a> с права <b>Contents: Read and write</b> само за този repo. Токенът се пази само в браузъра ти (localStorage) и се използва единствено за директни заявки към GitHub API.</p>
+    <label class="field">GitHub потребител/организация
+      <input type="text" id="cfgOwner" placeholder="напр. vasilt">
+    </label>
+    <label class="field">Repo
+      <input type="text" id="cfgRepo" placeholder="напр. apartment-buy-checklist">
+    </label>
+    <label class="field">Branch
+      <input type="text" id="cfgBranch" placeholder="main">
+    </label>
+    <label class="field">Personal Access Token
+      <input type="text" id="cfgToken" placeholder="github_pat_...">
+    </label>
+    <button class="primary" id="btnSaveSettings">Запази и зареди</button>
+  </div>
+
+  <div id="listView">
+    <div class="bar">
+      <div class="muted" id="repoInfo"></div>
+      <button class="primary" id="btnNew">+ Нов апартамент</button>
+    </div>
+    <div class="panel">
+      <table>
+        <thead><tr><th>Проект / сграда</th><th>Локация</th><th>Крайна цена</th><th>Статус</th><th>Прогрес</th><th>Обновен</th><th></th></tr></thead>
+        <tbody id="listBody"></tbody>
+      </table>
+      <p class="muted" id="emptyHint"></p>
+    </div>
+  </div>
+
+  <div id="editorView" class="hidden">
+    <div class="bar">
+      <button id="btnBack">← Обратно към списъка</button>
+      <div class="top-actions">
+        <button class="danger" id="btnDelete">Изтрий</button>
+        <button class="primary" id="btnSave">Запази</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="grid2">
+        <label class="field">Статус
+          <select id="fStatus">
+            <option value="new">Ново</option>
+            <option value="reviewing">В процес на проверка</option>
+            <option value="favorite">Топ фаворит</option>
+            <option value="rejected">Отхвърлен</option>
+          </select>
+        </label>
+        <label class="field">Обновен<span></span>
+          <input type="text" id="fUpdatedDisplay" disabled>
+        </label>
+      </div>
+    </div>
+    <div id="formSections"></div>
+    <div class="panel">
+      <label class="field">Бележки
+        <textarea id="fNotes" rows="4"></textarea>
+      </label>
+    </div>
+  </div>
+</main>
+
+<script>
+/* ---------- Checklist definition (from Cheklist_novo_stroitelstvo.docx) ---------- */
+const META_FIELDS = [
+  {key:'company', label:'Компания / инвеститор'},
+  {key:'project', label:'Проект / сграда'},
+  {key:'contact', label:'Контактно лице и телефон'},
+  {key:'location', label:'Локация'},
+  {key:'callDate', label:'Дата на разговора'},
+  {key:'link', label:'Линк към офертата'},
+];
+
+const SECTIONS = [
+  {title:'Моите задължителни критерии', items:[
+    ['check','3 реални спални'],
+    ['check','Всяка спалня минимум 12–13 кв.м'],
+    ['check','Оптимална спалня около 15 кв.м'],
+    ['check','Дневна + кухня + трапезария минимум 35 кв.м'],
+    ['check','2 пълноценни бани с тоалетни'],
+    ['check','Килер или функционално складово помещение'],
+    ['check','Гараж или удобно паркомясто'],
+    ['check','Без прекалено големи тераси / без пентхаус тип жилище'],
+    ['check','Ясна крайна цена и схема на плащане'],
+    ['check','Възможност за банково финансиране'],
+  ]},
+  {title:'Бърз филтър за 5 минути', items:[
+    ['check','Има ли 3 отделни спални и колко е чистата площ на всяка?'],
+    ['check','Колко е чистата площ на дневната с кухнята?'],
+    ['check','Има ли 2 пълноценни бани с тоалетни и килер?'],
+    ['check','Каква е чистата използваема площ без общи части и тераси?'],
+    ['check','Етаж, изложение и обща площ на терасите?'],
+    ['check','Крайна цена с ДДС плюс цена на гараж/паркомясто?'],
+    ['check','Етап на строежа и очакван Акт 16?'],
+    ['check','Схема на плащане и работещи банки по проекта?'],
+    ['check','Могат ли да изпратят план с размери и писмена оферта?'],
+  ]},
+  {title:'1. Разпределение и реални площи', items:[
+    ['text','Спалня 1 – чиста площ (кв.м)'],
+    ['text','Спалня 2 – чиста площ (кв.м)'],
+    ['text','Спалня 3 – чиста площ (кв.м)'],
+    ['text','Дневна + кухня + трапезария (кв.м)'],
+    ['text','Баня 1 (кв.м)'],
+    ['text','Баня 2 (кв.м)'],
+    ['text','Килер / склад (кв.м)'],
+    ['text','Мокро помещение (кв.м)'],
+    ['text','Коридори и антре (кв.м)'],
+    ['text','Тераси – общо (кв.м)'],
+    ['check','И трите помещения са реални спални, не кабинет или ниша'],
+    ['check','Във всяка спалня има място за легло, гардероб и нормално преминаване'],
+    ['check','Дневната побира пълноценна кухня, маса за 6 души, диван и TV зона'],
+    ['check','И двете санитарни помещения са пълноценни бани с тоалетна'],
+    ['check','Има място за пералня и сушилня'],
+    ['check','Има гардероб в антрето и достатъчно места за съхранение'],
+    ['check','Няма прекалено много коридорна или неизползваема площ'],
+    ['check','Няма неудобни колони, комини, скосения или тесни участъци'],
+    ['text','Обща площ по оферта (кв.м)'],
+    ['text','Застроена площ (кв.м)'],
+    ['text','Чиста използваема площ (кв.м)'],
+    ['text','Общи части – кв.м и %'],
+    ['text','Тераси (кв.м, по документи)'],
+    ['text','Мазе / прилежащ склад (кв.м)'],
+  ]},
+  {title:'2. Етаж, изложение, тераси и среда', items:[
+    ['text','Етаж (от / до)'],
+    ['text','Изложение на дневната'],
+    ['text','Изложение на спалните'],
+    ['text','Брой тераси и обща площ'],
+    ['check','Терасите плащат ли се на същата цена на кв.м?'],
+    ['check','Жилището на първи или последен етаж ли е?'],
+    ['check','Има ли технически етаж над жилището?'],
+    ['text','Покривна система, топлоизолация и хидроизолация'],
+    ['text','Разстояние до съседната сграда'],
+    ['text','Какво може да бъде построено в съседните имоти'],
+    ['check','Има ли шум от булевард, заведение, асансьор, гаражна врата или рампа?'],
+    ['check','Има ли риск гледката и светлината да бъдат закрити?'],
+  ]},
+  {title:'3. Гараж или паркомясто', items:[
+    ['text','Тип: гаражна клетка / подземно / външно място'],
+    ['text','Крайна цена с ДДС'],
+    ['text','Статут: самостоятелен обект или идеални части с право на ползване'],
+    ['text','Реални размери – ширина × дължина'],
+    ['text','Има ли колони, стени или трудна маневра?'],
+    ['text','Ширина и наклон на рампата'],
+    ['text','Асансьорът стига ли до гаража?'],
+    ['text','Възможност за зарядна станция'],
+    ['text','Месечна такса за гаража'],
+    ['text','Има ли места за гости?'],
+  ]},
+  {title:'4. Цена, плащане и банково финансиране', items:[
+    ['text','Апартамент – крайна цена с ДДС'],
+    ['text','Гараж / паркомясто с ДДС'],
+    ['text','Мазе / склад'],
+    ['text','Брокерска комисиона'],
+    ['text','Резервационна / административна такса'],
+    ['text','Прогнозни нотариални и местни разходи'],
+    ['text','Общо очаквана цена'],
+    ['check','Цената е фиксирана в договора'],
+    ['check','Няма клауза за едностранно увеличение за материали или инфлация'],
+    ['check','Ясно е как се урежда разлика в окончателната площ'],
+    ['check','Уточнено е дали резервационната такса се приспада и кога се връща'],
+    ['check','Всички допълнителни такси са описани писмено'],
+    ['text','Резервация – % / сума / срок'],
+    ['text','Предварителен договор – % / сума / срок'],
+    ['text','Акт 14 – % / сума / срок'],
+    ['text','Акт 15 – % / сума / срок'],
+    ['text','Акт 16 – % / сума / срок'],
+    ['text','Кои банки са финансирали точно този проект?'],
+    ['text','От кой строителен етап банките отпускат кредит?'],
+    ['check','Мога ли да използвам банка по мой избор?'],
+    ['check','Има ли ипотека или тежест върху земята / проекта?'],
+    ['text','Как конкретният апартамент ще бъде освободен от ипотеката?'],
+    ['check','Предоставят ли пълен комплект документи за банката?'],
+    ['check','Може ли схема на плащане, адаптирана към ипотечен кредит?'],
+    ['text','Какво става с депозита при отказ на кредит?'],
+    ['check','Може ли договорна клауза за връщане на депозита при отказ?'],
+    ['text','Колко време се предоставя за банково одобрение?'],
+  ]},
+  {title:'5. Инвеститор, строител, документи и срокове', items:[
+    ['text','Фирма инвеститор'],
+    ['text','Фирма строител'],
+    ['text','Собственик на земята'],
+    ['text','Разрешение за строеж – номер и дата'],
+    ['text','Текущ строителен етап'],
+    ['text','Срок за Акт 14'],
+    ['text','Срок за Акт 15'],
+    ['text','Срок за въвеждане в експлоатация / Акт 16'],
+    ['text','Има ли обезщетени собственици?'],
+    ['text','На кого принадлежи конкретният апартамент?'],
+    ['text','Има ли тежести върху земята, проекта или апартамента?'],
+    ['text','Предишни завършени проекти за посещение'],
+    ['check','Предоставят документите за независима проверка от адвокат'],
+    ['check','Позволяват коментари по предварителния договор'],
+    ['check','Сроковете и обещанията влизат писмено в договора'],
+    ['check','Има конкретни неустойки за забавяне на инвеститора'],
+    ['check','Плащанията са обвързани с реално завършен етап, не само с дата'],
+    ['check','Има процедура за връщане на платеното при съществено неизпълнение'],
+  ]},
+  {title:'6. Строителство и степен на завършеност', items:[
+    ['text','Точна степен на завършеност при предаване'],
+    ['text','Светла височина след готов под'],
+    ['text','Вид дограма и стъклопакет'],
+    ['text','Фасадна топлоизолация'],
+    ['text','Звукоизолация между апартаменти и етажи'],
+    ['text','Вид на вътрешните преградни стени'],
+    ['text','Отопление: ТЕЦ / газ / термопомпа / електричество'],
+    ['check','Изводи и места за климатици'],
+    ['check','Индивидуални електромери и водомери'],
+    ['check','Подготовка за съдомиялна, пералня, сушилня и аспиратор'],
+    ['check','Интернет, TV и достатъчно електрически точки'],
+    ['text','Гаранционни срокове и процедура за дефекти'],
+  ]},
+  {title:'7. Промени, общи части и бъдещи разходи', items:[
+    ['check','Възможни ли са промени по вътрешното разпределение?'],
+    ['text','До кой етап могат да се заявят промени'],
+    ['check','Може ли да се увеличи малка спалня или да се добави килер?'],
+    ['check','Могат ли да се местят врати, контакти и ВиК изводи?'],
+    ['text','Кои стени са носещи'],
+    ['text','Каква е цената за промени'],
+    ['check','Получавам ли актуализиран архитектурен план?'],
+    ['check','Отразяват ли се промените в окончателните документи?'],
+    ['text','Брой апартаменти в сградата / на етаж'],
+    ['text','Брой входове и асансьори'],
+    ['text','Асансьор до гаража'],
+    ['text','Контролиран достъп / видеонаблюдение'],
+    ['text','Прогнозна месечна такса поддръжка'],
+    ['text','Управляваща компания и срок на договора'],
+    ['text','Двор / детска площадка'],
+    ['text','Помещение за велосипеди и колички'],
+    ['text','Ширина на входа и размер на асансьора'],
+    ['check','Училище и детска градина'],
+    ['check','Градски транспорт'],
+    ['check','Магазини, аптеки и медицински услуги'],
+    ['check','Парк и детски площадки'],
+    ['check','Трафик и достъп в пиков час'],
+    ['check','Шумови източници'],
+    ['check','Канализация и отводняване'],
+    ['check','Планирано бъдещо застрояване / инфраструктура'],
+  ]},
+  {title:'8. Какво да поискам след разговора', items:[
+    ['check','Архитектурен план с точни размери'],
+    ['check','Разбивка на чистите площи на помещенията'],
+    ['check','План на целия етаж и позиция на апартамента'],
+    ['check','Изложение и визуализации на гледките'],
+    ['check','План на гаража с конкретното паркомясто'],
+    ['check','Писмена ценова оферта с ДДС и всички такси'],
+    ['check','Схема на плащане'],
+    ['check','Техническа спецификация и степен на завършеност'],
+    ['check','Срокове за Акт 14, Акт 15 и Акт 16'],
+    ['check','Проект на резервационен договор'],
+    ['check','Проект на предварителен договор'],
+    ['check','Данни за инвеститора и строителя'],
+    ['check','Списък със завършени проекти'],
+    ['check','Информация за такса поддръжка'],
+  ]},
+  {title:'9. Червени флагове ⚠', items:[
+    ['check','Не казват чистите площи на стаите'],
+    ['check','Говорят само за обща площ с общи части'],
+    ['check','Не изпращат план с размери'],
+    ['check','Няма ясна крайна цена'],
+    ['check','Искат твърде голямо плащане в ранен етап'],
+    ['check','Плащанията са по дати, а не по строителни етапи'],
+    ['check','Няма реални неустойки за забавяне'],
+    ['check','Депозитът не се връща дори при проблем с документи или кредит'],
+    ['check','Не позволяват адвокатски преглед'],
+  ]},
+];
+// assign stable keys once, at load
+SECTIONS.forEach((s,si)=> s.items.forEach((it,ii)=> it[2] = 'f'+si+'_'+ii));
+
+/* ---------- GitHub-as-a-database ---------- */
+const DATA_PATH = 'data/apartments.json';
+let cfg = JSON.parse(localStorage.getItem('gh_cfg')||'null');
+let records = {};
+let fileSha = null;
+let currentId = null;
+
+function ghHeaders(){
+  return {Authorization:'Bearer '+cfg.token, Accept:'application/vnd.github+json'};
+}
+function b64EncodeUnicode(str){
+  return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g,(m,p)=>String.fromCharCode('0x'+p)));
+}
+function b64DecodeUnicode(str){
+  return decodeURIComponent(atob(str).split('').map(c=>'%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+}
+
+async function loadRecords(){
+  showMsg('');
+  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${DATA_PATH}?ref=${cfg.branch}`;
+  const res = await fetch(url, {headers: ghHeaders()});
+  if(res.status === 404){ records = {}; fileSha = null; return; }
+  if(!res.ok){ throw new Error('GitHub грешка при зареждане: '+res.status+' '+(await res.text())); }
+  const json = await res.json();
+  fileSha = json.sha;
+  records = json.content ? JSON.parse(b64DecodeUnicode(json.content.replace(/\n/g,''))) : {};
+}
+
+async function saveRecords(message){
+  const body = {
+    message: message || 'Update apartments.json',
+    content: b64EncodeUnicode(JSON.stringify(records, null, 2)),
+    branch: cfg.branch,
+  };
+  if(fileSha) body.sha = fileSha;
+  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${DATA_PATH}`;
+  const res = await fetch(url, {method:'PUT', headers:{...ghHeaders(),'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  if(!res.ok){ throw new Error('GitHub грешка при запис: '+res.status+' '+(await res.text())); }
+  const json = await res.json();
+  fileSha = json.content.sha;
+}
+
+/* ---------- UI helpers ---------- */
+function showMsg(text, type){
+  const el = document.getElementById('msg');
+  if(!text){ el.innerHTML=''; return; }
+  el.innerHTML = `<div class="msg ${type||'error'}">${escapeHtml(text)}</div>`;
+}
+function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+function fmtDate(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('bg-BG')+' '+d.toLocaleTimeString('bg-BG',{hour:'2-digit',minute:'2-digit'});
+}
+function progressOf(rec){
+  let total=0, done=0;
+  SECTIONS.forEach(s=> s.items.forEach(it=>{
+    if(it[0]==='check'){ total++; if(rec.fields[it[2]]) done++; }
+  }));
+  return total ? Math.round(done/total*100) : 0;
+}
+const STATUS_LABEL = {new:'Ново', reviewing:'В проверка', favorite:'★ Фаворит', rejected:'Отхвърлен'};
+
+/* ---------- List view ---------- */
+function renderList(){
+  document.getElementById('repoInfo').textContent = cfg ? `${cfg.owner}/${cfg.repo} (${cfg.branch})` : '';
+  const body = document.getElementById('listBody');
+  body.innerHTML = '';
+  const list = Object.values(records).sort((a,b)=> (b.updatedAt||'').localeCompare(a.updatedAt||''));
+  document.getElementById('emptyHint').textContent = list.length ? '' : 'Няма добавени апартаменти още.';
+  for(const rec of list){
+    const tr = document.createElement('tr');
+    tr.className = 'row';
+    const pct = progressOf(rec);
+    tr.innerHTML = `
+      <td>${escapeHtml(rec.meta.project||'(без име)')}</td>
+      <td>${escapeHtml(rec.meta.location||'')}</td>
+      <td>${escapeHtml(rec.fields['f6_6']||'')}</td>
+      <td>${STATUS_LABEL[rec.status]||''}</td>
+      <td><span class="progress"><span style="width:${pct}%"></span></span> <span class="muted">${pct}%</span></td>
+      <td class="muted">${fmtDate(rec.updatedAt)}</td>
+      <td><button data-id="${rec.id}" class="btnOpen">Отвори</button></td>`;
+    tr.querySelector('.btnOpen').addEventListener('click', (e)=>{ e.stopPropagation(); openEditor(rec.id); });
+    tr.addEventListener('click', ()=> openEditor(rec.id));
+    body.appendChild(tr);
+  }
+}
+
+/* ---------- Editor view ---------- */
+function blankRecord(){
+  const id = Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  return {id, meta:{}, fields:{}, status:'new', notes:'', createdAt:new Date().toISOString(), updatedAt:new Date().toISOString()};
+}
+
+function renderEditor(rec){
+  document.getElementById('fStatus').value = rec.status;
+  document.getElementById('fUpdatedDisplay').value = fmtDate(rec.updatedAt) || '—';
+  document.getElementById('fNotes').value = rec.notes || '';
+
+  const container = document.getElementById('formSections');
+  container.innerHTML = '';
+
+  const metaDetails = document.createElement('details');
+  metaDetails.open = true;
+  metaDetails.innerHTML = `<summary>Данни за офертата</summary><div class="body" id="metaBody"></div>`;
+  container.appendChild(metaDetails);
+  const metaBody = metaDetails.querySelector('#metaBody');
+  for(const f of META_FIELDS){
+    const label = document.createElement('label');
+    label.className = 'field';
+    label.innerHTML = `${escapeHtml(f.label)}<input type="text" data-meta="${f.key}">`;
+    label.querySelector('input').value = rec.meta[f.key] || '';
+    metaBody.appendChild(label);
+  }
+
+  SECTIONS.forEach((section, si)=>{
+    const det = document.createElement('details');
+    const totalChecks = section.items.filter(it=>it[0]==='check').length;
+    const doneChecks = section.items.filter(it=>it[0]==='check' && rec.fields[it[2]]).length;
+    const tag = totalChecks ? ` <span class="muted">(${doneChecks}/${totalChecks})</span>` : '';
+    det.innerHTML = `<summary>${escapeHtml(section.title)}${tag}</summary><div class="body"></div>`;
+    const body = det.querySelector('.body');
+    section.items.forEach(([type,label,key])=>{
+      if(type==='check'){
+        const l = document.createElement('label');
+        l.className='check';
+        l.innerHTML = `<input type="checkbox" data-key="${key}"> <span>${escapeHtml(label)}</span>`;
+        l.querySelector('input').checked = !!rec.fields[key];
+        body.appendChild(l);
+      } else {
+        const l = document.createElement('label');
+        l.className='field';
+        l.innerHTML = `${escapeHtml(label)}<input type="text" data-key="${key}">`;
+        l.querySelector('input').value = rec.fields[key] || '';
+        body.appendChild(l);
+      }
+    });
+    container.appendChild(det);
+  });
+}
+
+function collectEditorIntoRecord(rec){
+  document.querySelectorAll('#metaBody input[data-meta]').forEach(inp=>{
+    rec.meta[inp.dataset.meta] = inp.value;
+  });
+  document.querySelectorAll('#formSections input[data-key]').forEach(inp=>{
+    rec.fields[inp.dataset.key] = inp.type==='checkbox' ? inp.checked : inp.value;
+  });
+  rec.status = document.getElementById('fStatus').value;
+  rec.notes = document.getElementById('fNotes').value;
+}
+
+function openEditor(id){
+  currentId = id || null;
+  const rec = id ? records[id] : blankRecord();
+  if(!id) records[rec.id] = rec, currentId = rec.id; // hold unsaved new record in memory only until Save
+  renderEditor(rec);
+  document.getElementById('listView').classList.add('hidden');
+  document.getElementById('editorView').classList.remove('hidden');
+}
+function closeEditor(){
+  currentId = null;
+  document.getElementById('editorView').classList.add('hidden');
+  document.getElementById('listView').classList.remove('hidden');
+  renderList();
+}
+
+/* ---------- Events ---------- */
+document.getElementById('btnSettings').addEventListener('click', ()=>{
+  document.getElementById('settingsPanel').classList.toggle('hidden');
+  if(cfg){
+    document.getElementById('cfgOwner').value = cfg.owner;
+    document.getElementById('cfgRepo').value = cfg.repo;
+    document.getElementById('cfgBranch').value = cfg.branch;
+    document.getElementById('cfgToken').value = cfg.token;
+  }
+});
+document.getElementById('btnSaveSettings').addEventListener('click', async ()=>{
+  cfg = {
+    owner: document.getElementById('cfgOwner').value.trim(),
+    repo: document.getElementById('cfgRepo').value.trim(),
+    branch: document.getElementById('cfgBranch').value.trim() || 'main',
+    token: document.getElementById('cfgToken').value.trim(),
+  };
+  localStorage.setItem('gh_cfg', JSON.stringify(cfg));
+  document.getElementById('settingsPanel').classList.add('hidden');
+  await init();
+});
+document.getElementById('btnNew').addEventListener('click', ()=> openEditor(null));
+document.getElementById('btnBack').addEventListener('click', closeEditor);
+document.getElementById('btnSave').addEventListener('click', async ()=>{
+  try{
+    const rec = records[currentId];
+    collectEditorIntoRecord(rec);
+    rec.updatedAt = new Date().toISOString();
+    await saveRecords(`Save apartment: ${rec.meta.project || rec.id}`);
+    showMsg('Записано.', 'ok');
+    closeEditor();
+  }catch(err){ showMsg(err.message); }
+});
+document.getElementById('btnDelete').addEventListener('click', async ()=>{
+  if(!currentId) return;
+  if(!confirm('Изтрий този апартамент?')) return;
+  delete records[currentId];
+  try{
+    await saveRecords('Delete apartment record');
+    showMsg('Изтрито.', 'ok');
+  }catch(err){ showMsg(err.message); }
+  closeEditor();
+});
+
+/* ---------- Init ---------- */
+async function init(){
+  if(!cfg || !cfg.owner || !cfg.repo || !cfg.token){
+    document.getElementById('settingsPanel').classList.remove('hidden');
+    showMsg('Свържи се с GitHub repo от настройките, за да зареждаш и пазиш записите.', 'error');
+    return;
+  }
+  try{
+    await loadRecords();
+    renderList();
+  }catch(err){ showMsg(err.message); }
+}
+init();
+</script>
+</body>
+</html>
